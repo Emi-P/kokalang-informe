@@ -1,14 +1,31 @@
-stages:
-  - build
+name: Build report
 
-build_docs:
-  stage: build
-  image: pandoc/latex
-  script:
-    - pandoc informe.md -o informe.pdf
-    - pandoc informe.md -s --mathjax -o informe.html
-  artifacts:
-    name: "informe-$CI_COMMIT_SHORT_SHA"
-    paths:
-      - informe.pdf
-      - informe.html
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    container:
+      image: pandoc/latex
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build PDF
+        run: pandoc informe.md -o informe.pdf
+
+      - name: Build HTML
+        run: pandoc informe.md -s --mathjax -o informe.html
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: informe
+          path: |
+            informe.pdf
+            informe.html
