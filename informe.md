@@ -66,3 +66,22 @@ Por otro lado, `square3` posee el efecto `div`, indicando que la computación pu
 Finalmente, `square4` posee el efecto `exn`, indicando que la evaluación puede finalizar lanzando una excepción mediante la operación `throw`.
 
 De esta manera, el sistema de tipos permite describir estáticamente ciertos aspectos observables del comportamiento de los programas.
+
+<!-- ------------------------------------------------------------- -->
+# Referencias
+
+[1] Daan Leijen. *Koka: Programming with Row-Polymorphic Effect Types*. 2014. Disponible en: https://arxiv.org/pdf/1406.2061
+
+[2] Daan Leijen. *Programming with Implicit Values, Functions, and Control*. Microsoft Research Technical Report, 2019. Disponible en: https://www.microsoft.com/en-us/research/wp-content/uploads/2019/03/implicits-tr-v2.pdf
+
+[3] Andrej Bauer y Matija Pretnar. *An Introduction to Algebraic Effects and Handlers*. Disponible en: https://www.eff-lang.org/handlers-tutorial.pdf
+
+[4] Gordon Plotkin y Matija Pretnar. *Handlers of Algebraic Effects*. Disponible en: https://homepages.inf.ed.ac.uk/gdp/publications/Effect_Handlers.pdf
+
+[5] Koka Documentation. Disponible en: https://koka-lang.github.io/koka/doc/book.html
+
+[6] Koka Community Documentation. Disponible en: https://koka-community.github.io/koka-docs/koka-docs.kk.html
+
+[7] Repositorio oficial de Koka. Disponible en: https://github.com/koka-lang/koka
+
+[8] Daan Leijen. *Koka Presentation*. Disponible en: https://www.youtube.com/watch?v=6OFhD_mHtKA
