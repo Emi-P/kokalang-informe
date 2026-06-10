@@ -1,10 +1,14 @@
-name: Build report
+name: Publish report
 
 on:
   push:
     branches:
       - master
-  pull_request:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
 
 jobs:
   build:
@@ -20,12 +24,24 @@ jobs:
         run: pandoc informe.md -o informe.pdf
 
       - name: Build HTML
-        run: pandoc informe.md -s --mathjax -o informe.html
+        run: pandoc informe.md -s --mathjax -o index.html
 
-      - name: Upload artifacts
-        uses: actions/upload-artifact@v4
+      - name: Prepare Pages
+        run: |
+          mkdir public
+          cp index.html public/
+          cp informe.pdf public/
+
+      - uses: actions/upload-pages-artifact@v3
         with:
-          name: informe
-          path: |
-            informe.pdf
-            informe.html
+          path: public
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+
+    environment:
+      name: github-pages
+
+    steps:
+      - uses: actions/deploy-pages@v4
