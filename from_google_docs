@@ -1,0 +1,107 @@
+Introducción
+El paradigma de programación funcional promueve funciones puras, cuyo resultado depende únicamente de sus argumentos. Sin embargo, en la práctica las funciones pueden tener efectos secundarios como no terminar, lanzar excepciones o modificar estado.
+Como alternativa, se plantea el enfoque de los algebraic effects and handlers, que representa los efectos como operaciones abstractas, como get y set para estado mutable o raise para excepciones.
+Koka es un lenguaje funcional que destaca por explicitar los efectos en el tipo de las funciones y por el uso de effect handlers para dar semántica a su manejo.
+En este escrito se introduce el sistema de tipos de Koka, en particular sus reglas de inferencia de efectos, y se analiza cómo esta información puede utilizarse para la implementación y composición de effect handlers.
+El sistema de tipos con efectos (Row-polymorphic Effect Types)
+El sistema de tipos de tipos con efectos (effect types) de Koka, incorpora información sobre los efectos que una función puede producir durante su ejecución. Para ello, los efectos se representan mediante effect rows, es decir, colecciones extensibles de etiquetas que describen los efectos presentes en un cálculo
+Por ejemplo, <exn> representa el efecto de lanzar excepciones. Si f es una función de Int en Int que puede lanzar excepción, entonces tendrá la signatura:
+f: int -> <exn, div> int
+Si además puede divergir, su signatura sería:
+f: int -> <exn, div> int
+El sistema es row-polymorphic, lo que significa que las funciones pueden ser polimórficas respecto a los efectos que contienen. La función map sobre listas de enteros en este lenguaje tiene tipo:
+map : (list<int> , int → ε int ) → ε list<int>
+
+Donde esta signatura se lee cómo: map toma una lista de enteros, y una función Int→Int que puede tener un efecto secundario ε. La transformación que realiza map sobre esta lista, propaga el efecto secundario ε y produce una lista de enteros.
+
+Los tipos de efecto se representan mediante filas de efectos (effect rows), es decir, colecciones de etiquetas que describen los efectos que una expresión puede realizar. Una fila puede ser vacía (<>), una variable de efecto polimórfica (μ) o una extensión de otra fila mediante una nueva etiqueta (<l | ε>). De esta manera, una fila cerrada tiene la forma <l₁, ..., lₙ>, mientras que una fila abierta tiene la forma <l₁, ..., lₙ | μ>, indicando que además de los efectos conocidos puede contener otros efectos aún no determinados.
+
+
+Un aspecto distintivo del sistema de tipos en Koka es la equivalencia de efectos. Esta resulta fundamental para comparar, unificar e inferir efectos sin depender del orden en el aparecen escritos. Algunas reglas de equivalencia se muestran en la Figura 1.
+
+Por ejemplo, como resultado de aplicar la reglas, tenemos  <exn, div>  <div, exn>. Pues exn no div y por regla (EQ-SWAP) <div | <exn | <>>>  <exn | <div |<>>>, es decir, <div, exn>  <exn, div>.
+
+Notese que no se tiene una regla de reducción de efectos del estilo <l |<l | >><l | >. Esto es importante por significa que el sistema de tipos diferencia entre efectos duplicados, por ejemplo <exn, exn> no <exn>. Si bien, dificulta la intuición del usuario en el tipo de función, se utiliza debido a que permite [TO DO: cerrar la idea con el ejemplo de catch, pero más concreto]
+
+La inferencia de efectos en Koka se formaliza mediante un sistema de reglas de tipado, algunas de las cuales se presentan en la Figura 3. Estas reglas determinan qué efectos pueden atribuirse a una expresión a partir de su estructura y del entorno de tipos. Para describirlas, primero se introduce una sintaxis reducida de expresiones del lenguaje.
+
+
+
+La sintaxis de este pequeño cálculo lambda es suficiente para introducir algunas reglas interesantes de la inferencia de tipos con efectos. Las reglas de tipos se formulan respecto de un entorno de tipos (En general denotados Γ), que asocia variables con tipos. La ecuación:
+			Γ(z) = σ
+Nos dice que  Γ le asocia el tipo σ a la variable z. 
+(e.g) Γ(z)=Int
+(e.g) Γ(y)=Bool
+Estos entornos se pueden extender mediante coma y dos puntos, esto es: Si Γ es cualquier entorno podemos cambiar un punto
+Si Γ’ = Γ,x : σ ⟹ Γ’(x) = σ ( Analogo a: Γ’ = [Γ|x : σ] )
+Esto viene de que coca es un lenguaje tipado.
+Utilizaremos estos entornos para definir las reglas de tipos sobre cualquier expresión del calculo que presentamos sintacticamente antes.
+
+Una regla de tipos de la forma “Γ ⊢ e : σ | ε”  impone que bajo el entorno Γ la expresión e tiene el tipo σ con un efecto ε. Con esto se pueden analizar algunas reglas:
+
+
+
+Analizamos la regla (LAM) con un ejemplo. Tiparemos λx. x. Asumiendo Γ,x:Int, por la regla de variables tenemos:
+   				Γ,x:Int⊢x:Int∣⟨⟩
+Sustituyendo en la regla tenemos
+				Γ,x:Int⊢x:Int∣⟨⟩​
+				______________
+				Γ⊢λx.x:Int→⟨⟩​Int∣⟨⟩
+Osea que en el entorno que tipa x como un entero, la identidad λx. x es tipada como λx.x:Int→⟨⟩​Int, osea una función de enteros en enteros, sin efectos.
+Tipemos λx.throw(), teniendo como premisa Γ,x:Int⊢throw():Int∣⟨exn⟩. Aplicando la regla tenemos que:
+
+Γ,x : Int ⊢ throw() : Int∣⟨exn⟩​
+_______________________________
+Γ ⊢ λx.throw() : Int→ ⟨exn⟩ ​Int∣⟨⟩
+  
+Hay que notar que en sí misma, el objeto λx.throw() no tiene un efecto secundario, pues se infiere ⟨⟩. Pero es una función del tipo Int→ ⟨exn⟩ ​Int. Aunque parezca confuso nos dice muy elegantemente que λx.throw(), podria existir como subexpresión pero, que si no es aplicada, no necesariamente se infiere el efecto ⟨exn⟩. Por ejemplo
+(λz.(λx.throw())
+Claramente es la función, que va a devolver constantemente ‘λx.throw()’ sin aplicarla. Por lo que es razonable no inferir que tenga la posibilidad de lanzar una excepción.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+Para expresar este polimorfismo de efectos, Koka representa los efectos como rows. Una row puede ser cerrada, cuando enumera completamente los efectos posibles, o abierta, cuando termina en una variable de efectos que representa efectos aún desconocidos. Por ejemplo:
+⟨exn,div⟩
+es una row cerrada que indica que una computación puede lanzar excepciones o divergir, mientras que
+⟨exn∣μ⟩
+es una row abierta que indica que la computación tiene al menos el efecto exn, además de los efectos contenidos en μ
+Formalmente, las rows de efectos se construyen a partir de la row vacía ⟨⟩, variables de efectos μ y una operación de extensión ⟨l∣ε⟩, donde l es una etiqueta de efecto y ε otra row de efectos.
+Debido a que el orden de los efectos no es relevante, Koka define una relación de equivalencia sobre las rows. En particular:
+⟨l 1 ∣ ⟨l 2 ∣ε⟩⟩≡⟨l 2 ∣ ⟨l 1 ∣ε⟩⟩
+siempre que l 1 ≠ l 2. Esto permite considerar equivalentes rows que contienen los mismos efectos en distinto orden.
+Y después agregaría el detalle que hace especial a Koka:
+A diferencia de muchos sistemas basados en rows, Koka permite etiquetas duplicadas. Por lo tanto:
+⟨exn,exn⟩ ≢ ⟨exn⟩
+Esta decisión simplifica la unificación durante la inferencia de tipos y permite asignar tipos precisos a construcciones que eliminan efectos, como los manejadores de excepciones (catch).
+
+

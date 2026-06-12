@@ -14,7 +14,7 @@ El sistema de tipos de tipos con efectos (*effect types*) de Koka, incorpora inf
 
 Por ejemplo, $\langle\texttt{exn}\rangle$ representa el efecto de lanzar excepciones. Si $f$ es una función de $\texttt{Int}$ en $\texttt{Int}$ que puede lanzar excepción, entonces tendrá la signatura:
 
-$$f: \texttt{int} \to \langle\texttt{exn}, \texttt{div}\rangle\ \texttt{int}$$
+$$f: \texttt{int} \to \langle\texttt{exn}\rangle\ \texttt{int}$$
 
 Si además puede divergir, su signatura sería:
 
