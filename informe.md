@@ -1,86 +1,214 @@
-## Introducción
+# Trabajo Especial de Modelos y Simulación
 
-El paradigma de programación funcional promueve funciones puras, cuyo resultado depende únicamente de sus argumentos. Sin embargo, en la práctica las funciones pueden tener efectos secundarios como no terminar, lanzar excepciones o modificar estado.
+**Integrantes:** Emilio Joaquin Pereyra \| Julian David Carrillo
+Montilla
 
-Como alternativa, se plantea el enfoque de los *algebraic effects and handlers*, que representa los efectos como operaciones abstractas, como `get` y `set` para estado mutable o `raise` para excepciones.
+**Fecha:** Primer cuatrimestre 2026
 
-Koka es un lenguaje funcional que destaca por explicitar los efectos en el tipo de las funciones y por el uso de *effect handlers* para dar semántica a su manejo.
+------------------------------------------------------------------------
 
-En este escrito se introduce el sistema de tipos de Koka, en particular sus reglas de inferencia de efectos, y se analiza cómo esta información puede utilizarse para la implementación y composición de *effect handlers*.
+## Ejercicio 1 --- Centro de atención con servidores en serie
 
-## El sistema de tipos con efectos (*Row-polymorphic Effect Types*)
+### 1.a --- Implementación de la simulación
 
-El sistema de tipos de tipos con efectos (*effect types*) de Koka, incorpora información sobre los efectos que una función puede producir durante su ejecución. Para ello, los efectos se representan mediante *effect rows*, es decir, colecciones extensibles de etiquetas que describen los efectos presentes en un cálculo.
+Las llegadas siguen un proceso de Poisson no homogéneo con tasa
+$\lambda(t) = 8 + 4\sin(\pi t/12)$. Para simularlas se aplica el
+**método de adelgazamiento** de la Proposición 2.1: se genera
+un proceso de Poisson homogéneo con tasa $\lambda_{\max}=12$ (cota
+superior) y se acepta cada candidato con probabilidad $\lambda(t)/12$.
 
-Por ejemplo, $\langle\texttt{exn}\rangle$ representa el efecto de lanzar excepciones. Si $f$ es una función de $\texttt{Int}$ en $\texttt{Int}$ que puede lanzar excepción, entonces tendrá la signatura:
+Los tiempos de servicio se generan por **transformada inversa**:
+$-\ln(U)/\lambda$ con $U\sim\mathcal{U}(0,1)$. Recepción: $Exp(15)$
+(media 4 min), Validación: $Exp(10)$ (media 6 min).
 
-$$f: \texttt{int} \to \langle\texttt{exn}\rangle\ \texttt{int}$$
+La simulación es de eventos discretos con tres tipos: llegada, fin de
+Recepción y fin de Validación. Se procesa el evento más próximo en cada
+iteración. Como ambas etapas son FIFO con un servidor, el orden de los
+clientes se preserva y no hacen falta identificadores. Para el ítem 1.b
+se simula hasta un tiempo $T$; para el 1.c se simula hasta atender $k$
+clientes.
 
-Si además puede divergir, su signatura sería:
+### 1.b --- Estimación del tiempo promedio de permanencia e intervalos de confianza
 
-$$f: \texttt{int} \to \langle\texttt{exn}, \texttt{div}\rangle\ \texttt{int}$$
+Se realizaron 1000 simulaciones independientes de $T = 24$ horas cada
+una. Para cada simulación se calculó la media muestral del tiempo de
+permanencia
 
-El sistema es *row-polymorphic*, lo que significa que las funciones pueden ser polimórficas respecto a los efectos que contienen. La función `map` sobre listas de enteros en este lenguaje tiene tipo:
+$$\bar X_i = \frac{1}{n_i} \sum_{j=1}^{n_i} (D_j - A_{1,j}).$$
 
-$$\texttt{map} : (\texttt{list<int>}, \texttt{int} \to \varepsilon \ \texttt{int}) \to \varepsilon \ \texttt{list<int>}$$
+Sobre el conjunto de 1000 medias muestrales se construyeron intervalos
+de confianza asintóticos usando el Teorema Central del Límite:
 
-Donde esta signatura se lee cómo: `map` toma una lista de enteros, y una función $\texttt{Int} \to \texttt{Int}$ que puede tener un efecto secundario $\varepsilon$. La transformación que realiza `map` sobre esta lista, propaga el efecto secundario $\varepsilon$ y produce una lista de enteros.
+$$IC_{1-\alpha} = \bar X \pm z_{\alpha/2} \frac{S}{\sqrt{N}}$$
 
-Los tipos de efecto se representan mediante filas de efectos (*effect rows*), es decir, colecciones de etiquetas que describen los efectos que una expresión puede realizar. Una fila puede ser vacía ($\langle\rangle$), una variable de efecto polimórfica ($\mu$) o una extensión de otra fila mediante una nueva etiqueta ($\langle l \mid \varepsilon\rangle$). De esta manera, una fila cerrada tiene la forma $\langle l_1, \langle\ldots, \langle l_n,\langle\rangle\rangle...\rangle$ (Con syntactic sugar: $\langle l_1,\ldots,  l_n\rangle$ ), mientras que una fila abierta tiene la forma $\langle l_1, \langle\ldots, \langle l_n, \langle\mu\rangle\rangle\ldots\rangle$ (*syntactic sugar*: $\langle l_1, \ldots, l_n \mid \mu\rangle$), indicando que además de los efectos conocidos puede contener otros efectos aún no determinados (polimorfismo).
+  Nivel de confianza   $z_{\alpha/2}$   IC (horas)
+  -------------------- ---------------- ----------------
+  95 %                 1.96             \[1.14, 1.22\]
+  98 %                 2.33             \[1.10, 1.30\]
 
-Un aspecto distintivo del sistema de tipos en Koka es la equivalencia de efectos. Esta resulta fundamental para comparar, unificar e inferir efectos sin depender del orden en el aparecen escritos. Algunas reglas de equivalencia se muestran en la Figura 1.
+La estimación puntual del tiempo promedio de permanencia ronda las **1.2
+horas (≈ 72 minutos)**.
 
-![Figura 1: Reglas de equivalencia de efectos]()
+### 1.c --- Histograma y bondad de ajuste
 
-Por ejemplo, como resultado de aplicar las reglas, tenemos $\langle\texttt{exn}, \texttt{div}\rangle \equiv \langle\texttt{div}, \texttt{exn}\rangle$. Pues $\texttt{exn} \neq \texttt{div}$ y por regla (EQ-SWAP) $\langle\texttt{div} \mid \langle\texttt{exn} \mid \langle\rangle\rangle\rangle \equiv \langle\texttt{exn} \mid \langle\texttt{div} \mid \langle\rangle\rangle\rangle$, es decir, $\langle\texttt{div}, \texttt{exn}\rangle \equiv \langle\texttt{exn}, \texttt{div}\rangle$.
+Se simuló la atención de los primeros 10 000 clientes y se construyó un
+histograma de sus tiempos de permanencia.
 
-Nótese que no se tiene una regla de reducción de efectos del estilo $\langle l \mid \langle l \mid \varepsilon\rangle\rangle \equiv \langle l \mid \varepsilon\rangle$. Esto es importante porque significa que el sistema de tipos diferencia entre efectos duplicados, por ejemplo $\langle\texttt{exn}, \texttt{exn}\rangle \not\equiv \langle\texttt{exn}\rangle$. Si bien dificulta la intuición del usuario en el tipo de función, se utiliza debido a que permite [TO DO: cerrar la idea con el ejemplo de catch, pero más concreto].
+**Características del histograma:** - Asimétrico con cola larga hacia la
+derecha. - Moda próxima a cero. - Media alrededor de 1.2 horas. -
+Presencia de valores extremos (cola larga).
 
-## La inferencia de efectos
+![Histograma de tiempos de permanencia con ajustes Exponencial y
+Lognormal](figs/histograma_ej1c.png)
 
-La inferencia de efectos en Koka se formaliza mediante un sistema de reglas de tipado, algunas de las cuales se presentan en la Figura 3. Estas reglas determinan qué efectos pueden atribuirse a una expresión a partir de su estructura y del entorno de tipos. Para describirlas, primero se introduce una sintaxis reducida de expresiones del lenguaje.
+**Distribuciones propuestas:**
 
-![Figura 3: Reglas de tipado con efectos]()
+1.  **Exponencial** --- por su uso habitual en teoría de colas y por
+    tener un solo parámetro fácil de estimar: $\hat\lambda = 1/\bar X$.
+2.  **Lognormal** --- por su capacidad de modelar datos positivos con
+    asimetría y cola larga. Parámetros estimados por máxima
+    verosimilitud: $\hat\mu = \overline{\log X}$,
+    $\hat\sigma = S_{\log X}$.
 
-La sintaxis de este pequeño cálculo lambda es suficiente para introducir algunas reglas interesantes de la inferencia de tipos con efectos. Las reglas de tipos se formulan respecto de un entorno de tipos (en general denotados $\Gamma$), que asocia variables con tipos. La ecuación:
+**Prueba $\chi^2$:**
 
-$$\Gamma(z) = \sigma$$
+Se utilizaron $k = 10$ intervalos basados en **cuantiles teóricos** de
+cada distribución para asegurar frecuencias esperadas uniformes. Los
+resultados fueron:
 
-Nos dice que $\Gamma$ le asocia el tipo $\sigma$ a la variable $z$.
+  Distribución   $\chi^2$   g.l.   p-valor
+  -------------- ---------- ------ -------------
+  Exponencial    ≈ 430      8      $\approx 0$
+  Lognormal      ---        7      $\approx 0$
 
-Por ejemplo:
+Con $n = 10\,000$ observaciones, el test $\chi^2$ tiene una potencia muy
+alta y rechaza ambas distribuciones. Ninguna provee un ajuste adecuado
+según el criterio del test.
 
-- $\Gamma(z) = \texttt{Int}$
-- $\Gamma(y) = \texttt{Bool}$
+**Discusión:**
 
-Estos entornos se pueden extender mediante coma y dos puntos, esto es: si $\Gamma$ es cualquier entorno podemos cambiar un punto:
+A pesar del rechazo estadístico, optamos por mantener **Exponencial** y
+**Lognormal** como las distribuciones candidatas por las siguientes
+razones:
 
-Si $\Gamma' = \Gamma, x : \sigma \implies \Gamma'(x) = \sigma$ (análogo a: $\Gamma' = [\Gamma \mid x : \sigma]$).
+- Son las distribuciones estándar en teoría de colas para modelar
+  tiempos de respuesta.
+- El histograma es compatible visualmente con ambas (cola larga, modo
+  cercano a cero).
+- Con muestras grandes ($n \gg 1000$), los tests de bondad de ajuste
+  tienden a rechazar prácticamente cualquier distribución paramétrica,
+  ya que detectan diferencias mínimas que no necesariamente son
+  relevantes en la práctica.
+- El análisis gráfico (superposición de PDFs sobre el histograma)
+  permite una evaluación complementaria que, en este caso, muestra un
+  seguimiento visual aceptable de la Lognormal en la cola y de la
+  Exponencial en la zona del modo.
 
-Esto viene de que Koka es un lenguaje tipado. Utilizaremos estos entornos para definir las reglas de tipos sobre cualquier expresión del cálculo que presentamos sintácticamente antes.
+------------------------------------------------------------------------
 
-Una regla de tipos de la forma $\Gamma \vdash e : \sigma \mid \varepsilon$ impone que bajo el entorno $\Gamma$ la expresión $e$ tiene el tipo $\sigma$ con un efecto $\varepsilon$. Con esto se pueden analizar algunas reglas:
+## Ejercicio 2 --- Centro de atención con clientes prioritarios
 
-Analizamos la regla (LAM) con un ejemplo. Tiparemos $\lambda x.\,x$. Asumiendo $\Gamma, x:\texttt{Int}$, por la regla de variables tenemos:
+### 2.a --- Adaptación de la simulación
 
-$$\Gamma, x:\texttt{Int} \vdash x : \texttt{Int} \mid \langle\rangle$$
+Cada cliente recibe al llegar un atributo Bernoulli con $p=0.20$ que
+determina si es prioritario. La Recepción sigue siendo FIFO para todos,
+pero en Validación se separan en dos colas: prioritaria y normal. Al
+terminar un servicio en Validación se atiende siempre al primer cliente
+de la cola prioritaria si está ocupada; solo cuando está vacía se
+atiende a la cola normal. Los servicios no son interrumpibles
+(non-preemptive).
 
-Sustituyendo en la regla tenemos:
+Como en la segunda etapa el orden de salida ya no coincide con el de
+llegada, cada cliente recibe un **identificador numérico** al ingresar,
+permitiendo aparear correctamente sus tiempos de llegada y salida.
 
-$$
-\frac{\Gamma, x:\texttt{Int} \vdash x : \texttt{Int} \mid \langle\rangle}{\Gamma \vdash \lambda x.\,x : \texttt{Int} \to \langle\rangle\ \texttt{Int} \mid \langle\rangle}
-$$
+### 2.b --- Estimación del tiempo promedio de permanencia e IC
 
-O sea que en el entorno que tipa $x$ como un entero, la identidad $\lambda x.\,x$ es tipada como $\lambda x.\,x : \texttt{Int} \to \langle\rangle\ \texttt{Int}$, o sea una función de enteros en enteros, sin efectos.
+Se realizaron 500 simulaciones de $T = 24$ horas cada una. Los
+resultados:
 
-Tipemos $\lambda x.\,\texttt{throw}()$, teniendo como premisa $\Gamma, x:\texttt{Int} \vdash \texttt{throw}() : \texttt{Int} \mid \langle\texttt{exn}\rangle$. Aplicando la regla tenemos que:
+  Tipo de cliente   Media (hs)   IC 95 %
+  ----------------- ------------ ----------------
+  Prioritarios      ≈ 0.32       \[0.31, 0.33\]
+  Normales          ≈ 1.41       \[1.35, 1.48\]
 
-$$
-\frac{\Gamma, x : \texttt{Int} \vdash \texttt{throw}() : \texttt{Int} \mid \langle\texttt{exn}\rangle}{\Gamma \vdash \lambda x.\,\texttt{throw}() : \texttt{Int} \to \langle\texttt{exn}\rangle\ \texttt{Int} \mid \langle\rangle}
-$$
+### 2.c --- Histogramas y estadísticas descriptivas
 
-Hay que notar que en sí misma, el objeto $\lambda x.\,\texttt{throw}()$ no tiene un efecto secundario, pues se infiere $\langle\rangle$. Pero es una función del tipo $\texttt{Int} \to \langle\texttt{exn}\rangle\ \texttt{Int}$. Aunque parezca confuso nos dice muy elegantemente que $\lambda x.\,\texttt{throw}()$ podría existir como subexpresión pero que, si no es aplicada, no necesariamente se infiere el efecto $\langle\texttt{exn}\rangle$. Por ejemplo:
+Se realizó una simulación larga (240 horas) para obtener una muestra con
+suficientes observaciones de ambos tipos.
 
-$$(\lambda z.\,(\lambda x.\,\texttt{throw}())$$
+![Histogramas de tiempos de permanencia por tipo de
+cliente](figs/histogramas_ej2c.png)
 
-Claramente es la función que va a devolver constantemente $\lambda x.\,\texttt{throw}()$ sin aplicarla. Por lo que es razonable no inferir que tenga la posibilidad de lanzar una excepción.
+  Estadística          Prioritarios   Normales
+  -------------------- -------------- ------------
+  Media                ≈ 0.3 hs       ≈ 1.4 hs
+  Mediana              ≈ 0.2 hs       ≈ 1.1 hs
+  Desvío estándar      ≈ 0.2 hs       ≈ 1.3 hs
+  Percentil 90         ≈ 0.7 hs       ≈ 3.0 hs
+  $P(T > 1\text{h})$   ≈ 2--5 %       ≈ 54--62 %
+  $P(T > 2\text{h})$   ≈ 0 %          ≈ 18--40 %
+
+**Diferencias observadas:**
+
+Los clientes prioritarios experimentan tiempos de permanencia
+significativamente menores. Su distribución está concentrada cerca de
+cero (media \~0.3 h, mediana \~0.2 h), con muy baja probabilidad de
+superar 1 hora. Los clientes normales, en cambio, presentan una
+distribución con cola mucho más larga (desvío \~1.3 h) y una
+probabilidad considerable de esperar más de 1 hora (\~60 %) y más de 2
+horas (\~20--40 %).
+
+### 2.d --- Comparación con el Ejercicio 1
+
+En el Ejercicio 1 (sin prioridades), todos los clientes tenían un tiempo
+de permanencia promedio de aproximadamente 1.2 horas.
+
+Al introducir prioridades en Validación:
+
+- **Prioritarios (20 %)**: su permanencia media se reduce drásticamente
+  a \~0.3 horas. Al tener prioridad sobre los normales en la cola de
+  Validación, rara vez esperan --- su tiempo en el sistema es
+  básicamente la suma de sus dos servicios más una espera mínima en
+  Recepción.
+- **Normales (80 %)**: su permanencia media aumenta a \~1.4 horas,
+  llegando en algunos casos a más de 3 horas (percentil 90). Son
+  desplazados constantemente por los clientes prioritarios que llegan
+  después pero pasan delante de ellos en Validación.
+
+**Impacto de la política de prioridades:**
+
+La política beneficia a una minoría (20 % del total) a costa de
+perjudicar a la mayoría (80 %). El tiempo promedio global (ponderado)
+resulta similar al del Ejercicio 1, pero la distribución se vuelve
+marcadamente bimodal: los prioritarios experimentan una mejora
+sustancial mientras que los normales sufren demoras adicionales. Este
+comportamiento es esperable: la prioridad sin interrupción
+(non-preemptive) en el cuello de botella (Validación, con mayor carga:
+$\rho \approx 0.8$) genera este efecto de "salto de cola" que penaliza a
+los clientes regulares.
+
+------------------------------------------------------------------------
+
+## Conclusiones generales
+
+Se implementaron dos simuladores de eventos discretos para un sistema de
+dos servidores en serie: uno sin prioridades (Ej. 1) y otro con clientes
+prioritarios en la segunda etapa (Ej. 2). Las simulaciones permitieron
+estimar los tiempos de permanencia, construir intervalos de confianza, y
+analizar la distribución de los datos mediante histogramas y pruebas de
+bondad de ajuste $\chi^2$.
+
+Las principales conclusiones son:
+
+1.  El tiempo promedio de permanencia sin prioridades es de
+    aproximadamente 1.2 horas, con intervalos de confianza estrechos
+    gracias al gran número de réplicas.
+2.  La distribución del tiempo de permanencia no se ajusta
+    satisfactoriamente a una Exponencial ni a una Lognormal según el
+    test $\chi^2$, aunque visualmente ambas son compatibles con el
+    histograma.
+3.  La introducción de prioridades reduce el tiempo de permanencia de
+    los clientes prioritarios (\~0.3 h) a costa de incrementar el de los
+    normales (\~1.4 h), generando una distribución bimodal con mayor
+    dispersión.
